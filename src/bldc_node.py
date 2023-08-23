@@ -18,8 +18,8 @@ class TinyM:
         
         self.params = get_bus_config(["canine", "slcan"])
         self.bus = can.Bus(interface="canine", bitrate=1000000)
-        self.params["bitrate"] = 1500 
-        init_tee(can.Bus(**params)) #i dont know why thos error is showing up
+        self.params["bitrate"] = 100000 
+        init_tee(can.Bus(**self.params))
         self.tm = create_device(node_id=1)
         
         rospy.init_node('motion_control')
