@@ -1,25 +1,49 @@
 #!/usr/bin/env python3.10
 
+import rospy
 import can
 from tinymovr.tee import init_tee
 from tinymovr.config import get_bus_config, create_device
+from canine import CANineBus
+from geometry_msgs.msg import Twist
 
-params = get_bus_config(["canine", "slcan"])
-params["bitrate"] = bitrate
-init_tee(can.Bus(**params))
-tm = create_device(node_id=1)
+class TinyM:
+    
+    def __init__(self):
+        
+        self.params = get_bus_config(["canine", "slcan"])
+        self.bus = can.Bus(interface="canine", bitrate=1000000)
+        self.params["bitrate"] = 1500
+        init_tee(can.Bus(**params))
+        self.tm = create_device(node_id=1)
+        
+        rospy.init_node('motion_control')
+        self.cmd_vel_sub = rospy.Subscriber('/cmd_vel',Twist,self.cmd_vel_clbk)
+        self.rate = rospy.Rate(10)  # Update rate in Hz
+    
+    def cmd_vel_clbk(self,msg):
+        
+        desired_velocity = msg.linear.x  # Adjust this as needed
+        
+        self.tm.controller.calibrate()
+        self.tm.controller.velocity_mode()
+        self.tm.controller.vel_setpoint = int(desired_velocity * 100)  # Convert to appropriate units
+        
+    
+    def main(self):
+        rospy.loginfo("Robot Motion Control Node started.")
+        while not rospy.is_shutdown():
+            self.rate.sleep()
+            
+        
+if __name__ == '__main__':
+    try:
+        controller = TinyM()
+        controller.main()
+    except rospy.ROSInterruptException:
+        pass
+            
+            
+        
 
-tm.encoder.type = 1
-tm.encoder.bandwidth = 1500
-
-tm.motor.pole_pairs = 4
-tm.save_config()
-tm.reset() 
-
-tm.controller.position.p_gain = 0.007 #best working as of now
-tm.controller.velocity.p_gain = 0.07
-
-tm.controller.calibrate()
-
-tm.controller.velocity_mode()
-tm.controller.vel_setpoint = 80000
+        
