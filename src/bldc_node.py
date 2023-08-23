@@ -7,14 +7,19 @@ from tinymovr.config import get_bus_config, create_device
 from canine import CANineBus
 from geometry_msgs.msg import Twist
 
+#as of now when i run this file, i get the 'can.exceptions.CanInitializationError: No active interface found
+#' error , working on fixing that
+
+#the configs file is just meant to be run once only when some changes are made
+
 class TinyM:
     
     def __init__(self):
         
         self.params = get_bus_config(["canine", "slcan"])
         self.bus = can.Bus(interface="canine", bitrate=1000000)
-        self.params["bitrate"] = 1500
-        init_tee(can.Bus(**params))
+        self.params["bitrate"] = 1500 
+        init_tee(can.Bus(**params)) #i dont know why thos error is showing up
         self.tm = create_device(node_id=1)
         
         rospy.init_node('motion_control')
