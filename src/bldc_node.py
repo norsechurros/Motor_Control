@@ -17,7 +17,7 @@ class TinyM:
     def __init__(self):
         
         self.params = get_bus_config(["canine", "slcan"])
-        self.bus = can.Bus(interface="canine", bitrate=1000000)
+        self.bus = can.Bus(interface="canine", bitrate=1000000)#made minor change here, isnt fixing the no interfaces issue tho
         self.params["bitrate"] = 100000 
         init_tee(can.Bus(**self.params))
         self.tm = create_device(node_id=1)
