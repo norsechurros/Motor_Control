@@ -6,6 +6,10 @@ from tinymovr.tee import init_tee
 from tinymovr.config import get_bus_config, create_device
 from canine import CANineBus
 from geometry_msgs.msg import Twist
+from traitlets.config import Config
+from tinymovr.discovery import Discovery
+
+
 
 #as of now when i run this file, i get the 'can.exceptions.CanInitializationError: No active interface found
 #' error , working on fixing that
@@ -16,8 +20,8 @@ class TinyM:
     
     def __init__(self):
         
-        self.params = get_bus_config(["canine", "slcan"])
-        self.bus = can.Bus(interface="canine", bitrate=1000000)#made minor change here, isnt fixing the no interfaces issue tho
+        self.params = get_bus_config(["slcan"])
+        self.bus = can.Bus(interface="slcan", bitrate=1000000)#made minor change here, isnt fixing the no interfaces issue tho
         self.params["bitrate"] = 100000 
         init_tee(can.Bus(**self.params))
         self.tm = create_device(node_id=1)
