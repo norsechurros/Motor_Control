@@ -1,0 +1,213 @@
+#!/usr/bin/env python3
+from _future_ import print_function
+
+import rospy
+from std_msgs.msg import Float64
+from geometry_msgs.msg import Twist
+
+import time
+# from _future_ import print_function
+
+import can
+from time import sleep
+
+from tinymovr import Tinymovr
+from tinymovr.iface import IFace
+from tinymovr.iface.can_bus import CANBus, guess_channel
+
+tm1: Tinymovr =None
+tm2: Tinymovr =None
+
+rate = 20 # rate in hz
+
+channel = guess_channel(bustype_hint='slcan')
+can_bus = can.Bus(bustype ="slcan", channel=channel ,bitrate="1000000")
+iface :IFace = CANBus(can_bus)
+tm1 = Tinymovr(node_id=1, iface=iface)#!/usr/bin/env python3
+from _future_ import print_function
+
+import rospy
+from std_msgs.msg import Float64
+from geometry_msgs.msg import Twist
+
+import time
+# from _future_ import print_function
+
+import can
+from time import sleep
+
+from tinymovr import Tinymovr
+from tinymovr.iface import IFace
+from tinymovr.iface.can_bus import CANBus, guess_channel
+
+tm1: Tinymovr =None
+tm2: Tinymovr =None
+
+rate = 20 # rate in hz
+
+channel = guess_channel(bustype_hint='slcan')
+can_bus = can.Bus(bustype ="slcan", channel=channel ,bitrate="1000000")
+iface :IFace = CANBus(can_bus)
+tm1 = Tinymovr(node_id=1, iface=iface)
+tm2 = Tinymovr(node_id=2, iface=iface)
+
+
+reset = False
+
+while reset == False:
+    try:
+        tm1.reset()
+        tm2.reset()
+        reset = True
+    except:
+        pass
+
+time.sleep(3)
+tm2 = Tinymovr(node_id=2, iface=iface)
+
+
+reset = False
+
+while reset == False:
+    try:
+        tm1.reset()
+        tm2.reset()
+        reset = True
+    except:
+        pass
+
+time.sleep(3)
+
+
+
+# Assuming the robot has a differential drive configuration, these are the parameters you would need:
+AXLE_LENGTH = 0.67 # distance between the left and right wheels
+WHEEL_RADIUS = 0.19 # radius of each wheel
+NO_OF_POLE = 4
+encoder_cpr = 1152
+
+encoder_cpr_to_m_s = 0.0010362
+
+left_wheel_rpm = 0
+right_wheel_rpm = 0
+
+odom_topic = "wheel_odom"
+odom_frame = "odom"
+base_frame = "base_link"
+odom_calc_hz = 10
+
+
+rospy.init_node('tmovr', anonymous=True)
+except can.exceptions.CanTimeoutError:velocity',  Float64, queue_size=2)
+raw_odom_publisher_vel_right     = rospy.Publisher('right/raw_odom/velocity', Float64, queue_size=2)
+old_pos_l = 0
+old_pos_r = 0
+new_pos_l = 0
+new_pos_r = 0
+vel_l = 0
+vel_r = 0
+
+"""            
+setup transform
+tf_publisher = tf2_ros.TransformBroadcaster()
+tf_msg = TransformStamped()
+tf_msg.header.frame_id = odom_frame
+tf_msg.child_frame_id  = base_frame
+tf_msg.transform.translation.x = 0.0
+tf_msg.transform.translation.y = 0.0
+tf_msg.transform.translation.z = 0.0
+tf_msg.transform.rotation.x = 0.0
+tf_msg.transform.rotation.y = 0.0
+tf_msg.transform.rotation.w = 0.0
+tf_msg.transform.rotation.z = 1.0  
+"""
+
+def cmd_vel_callback(data):
+    
+    global left_wheel_rpm, right_wheel_rpm
+    linear_x = data.linear.x
+    angular_z = data.angular.z
+    # Calculate the individual wheel velocities
+    left_wheel_velocity = linear_x - (angular_z * AXLE_LENGTH / 2)
+    right_wheel_velocity = linear_x + (angular_z * AXLE_LENGTH / 2)
+    # Convert from m/s to RPM
+    left_wheel_rpm = (left_wheel_velocity / (2 * 3.14 * WHEEL_RADIUS)) * 60
+    right_wheel_rpm = (right_wheel_velocity / (2 * 3.14 * WHEEL_RADIUS)) * 60
+
+    scalar_multiplier = 48
+    try:
+        tm1.set_vel_setpoint(-right_wheel_rpm * (24/60) * scalar_multiplier)
+        tm2.set_vel_setpoint(left_wheel_rpm * (24/60) * scalar_multiplier)
+    except can.exceptions.CanTimeoutError:    
+        pass
+
+    print("l:",left_wheel_rpm,";r:",right_wheel_rpm)
+
+def subscribe_to_cmd_vel():
+    try:
+        tm1.set_vel_setpoint(0)
+        tm2.set_vel_setpoint(0)
+    except can.exceptions.CanTimeoutError:    
+        pass
+
+    rospy.Subscriber("cmd_vel", Twist, cmd_vel_callback)
+
+def start_watchdog():
+    
+    try:
+        tm1.set_watchdog(1,1)
+        tm2.set_watchdog(1,1)
+    except can.exceptions.CanTimeoutError:
+        pass
+
+def disarm():
+    global tm1, tm2
+    try: 
+        tm1.idle()
+        tm2.idle()
+    except can.exceptions.CanTimeoutError:
+        pass
+
+def engage():
+    global tm1, tm2
+    try:
+        print("Right::")
+        print(tm1.device_info)
+        tm1.velocity_control()
+    except can.exceptions.CanTimeoutError:
+        print("No Response from right axis...")
+
+    try:
+        print("Left::")
+        print(tm2.device_info)
+        tm2.velocity_control()
+    except can.exceptions.CanTimeoutError:
+        print("No Response from left axis...")
+    
+def publish_wheel_data():
+    global vel_l,vel_r,new_pos_r,new_pos_l
+    try:
+        vel_l = float(tm2.encoder_estimates.velocity.magnitude)
+        vel_r = float(tm1.encoder_estimates.velocity.magnitude)
+        new_pos_l = float(-1 * tm1.encoder_estimates.position.magnitude)
+        new_pos_r = float(tm2.encoder_estimates.position.magnitude)
+    except:
+        pass
+    # print("Unable to get encoder estimates")
+
+    raw_odom_publisher_encoder_left.publish(new_pos_l)
+    raw_odom_publisher_encoder_right.publish(new_pos_r)
+    raw_odom_publisher_vel_left.publish(vel_l)
+    raw_odom_publisher_vel_right.publish(vel_r)
+
+if _name_ == '_main_':
+
+    subscribe_to_cmd_vel()
+
+    start_watchdog()
+
+    engage()
+         
+    while not rospy.is_shutdown():
+        publish_wheel_data()
+        rospy.sleep(1/rate)

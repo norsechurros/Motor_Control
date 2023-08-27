@@ -1,0 +1,2 @@
+
+-DCATKIN_DEVEL_PREFIX=/home/vansh/tm_ws/src/TinyM/devel -DCMAKE_INSTALL_PREFIX=/home/vansh/tm_ws/src/TinyM/install -G Unix Makefiles
