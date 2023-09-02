@@ -10,6 +10,7 @@ import time
 
 import can
 from time import sleep
+        
 
 from tinymovr import Tinymovr
 from tinymovr.iface import IFace
@@ -65,7 +66,7 @@ while reset == False:
 time.sleep(3)
 tm2 = Tinymovr(node_id=2, iface=iface)
 
-
+#####################################
 reset = False
 
 while reset == False:
@@ -77,7 +78,7 @@ while reset == False:
         pass
 
 time.sleep(3)
-
+####################################
 
 
 # Assuming the robot has a differential drive configuration, these are the parameters you would need:

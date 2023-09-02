@@ -37,34 +37,35 @@ class TinyM:
         params["bitrate"] = 1000000
         params["channel"]="/dev/ttyACM0"
         init_tee(can.Bus(**params))
-        tm = create_device(node_id=1)
+        tm1 = create_device(node_id=1)
+        tm2 = create_device(node_id=2)
         time.sleep(0.1)
 
-        tm.encoder.type = 0
+        tm1.encoder.type = 0
         time.sleep(0.1)
-        print(tm.encoder.type)
-        time.sleep(0.1)
-
-        tm.encoder.bandwidth = 1500
-        time.sleep(0.1)
-        print(tm.encoder.bandwidth)
+        print(tm1.encoder.type)
         time.sleep(0.1)
 
+        tm1.encoder.bandwidth = 1500
+        time.sleep(0.1)
+        print(tm1.encoder.bandwidth)
+        time.sleep(0.1)
 
-        tm.motor.pole_pairs = 4
+
+        tm1.motor.pole_pairs = 4
         time.sleep(0.1)
-        print(tm.motor.pole_pairs)
+        print(tm1.motor.pole_pairs)
         time.sleep(0.1)
 
-        tm.controller.position.p_gain = 0.01 #best working as of now
+        tm1.controller.position.p_gain = 0.01 #best working as of now
         time.sleep(0.1)
-        print(tm.controller.position.p_gain)
+        print(tm1.controller.position.p_gain)
         time.sleep(0.1)
-        tm.controller.velocity.p_gain = 0.01
+        tm1.controller.velocity.p_gain = 0.01
         time.sleep(0.1)
-        print(tm.controller.velocity.p_gain)
+        print(tm1.controller.velocity.p_gain)
         time.sleep(0.1)
-        print(tm.errors)
+        print(tm1.errors)
         rospy.init_node('motion_control')
         self.cmd_vel_sub = rospy.Subscriber('/cmd_vel',Twist,self.cmd_vel_clbk)
         self.rate = rospy.Rate(10)  # Update rate in Hz
@@ -79,10 +80,10 @@ class TinyM:
         left_w_rpm = (left_w_vel/2*3.14*WHEEL_RADIUS)*60
         right_w_rpm = -(right_w_vel/2*3.14*WHEEL_RADIUS)*60
         
-        self.tm.controller.velocity.setpoint = (left_w_rpm/60)* 24
+        self.tm1.controller.velocity.setpoint = (left_w_rpm/60)* 24
         
     def cmd_vel_sub(self):
-        self.tm.controller.velocity.setpoint = 0
+        self.tm1.controller.velocity.setpoint = 0
         
         rospy.Subscriber("cmd_vel", Twist, self.cmd_vel_clbk)
 
