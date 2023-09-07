@@ -1,95 +1,77 @@
 #!/usr/bin/env python3.10
 
 import rospy
+import math
 from std_msgs.msg import Float64
 from nav_msgs.msg import Odometry
-from geometry_msgs.msg import Pose, Point, Quaternion, Twist, Vector3
-from tf.transformations import quaternion_from_euler
+from geometry_msgs.msg import Quaternion, Pose, Twist
 
-class OdometryCalculator:
+class EncoderToOdometry:
 
     def __init__(self):
-        rospy.init_node('odometry_calculator', anonymous=True)
-        
-        # Initialize encoder position estimates
-        self.enc_pos_estTM1 = 0.0
-        self.enc_pos_estTM2 = 0.0
-        
-        # Create a subscriber to the encoder velocity topic
-        rospy.Subscriber('encoder_vel', Float64, self.encoder_callback)
-        
-        # Create an Odometry publisher
+        rospy.init_node('encoder_to_odom', anonymous=True)
+        self.enc_vel_tm1 = 0.0
+        self.enc_vel_tm2 = 0.0
+        self.prev_time = rospy.Time.now()
+
         self.odom_pub = rospy.Publisher('odom', Odometry, queue_size=10)
-        
-        self.rate = rospy.Rate(10)  # 10 Hz
-        self.last_time = rospy.Time.now()
+        self.enc_sub_tm1 = rospy.Subscriber('encoder_vel_tm1', Float64, self.enc_tm1_callback)
+        self.enc_sub_tm2 = rospy.Subscriber('encoder_vel_tm2', Float64, self.enc_tm2_callback)
 
-        # Initial robot pose
-        self.x = 0.0
-        self.y = 0.0
-        self.theta = 0.0
+        self.odom = Odometry()
+        self.odom.header.frame_id = "odom"
+        self.odom.child_frame_id = "base_footprint"
+        self.pose = Pose()
+        self.twist = Twist()
 
-    def encoder_callback(self, data):
-        # Update encoder position estimates
-        if data._connection_header['topic'] == 'encoder_vel':
-            if data._connection_header['callerid'].endswith('bldc_nodee'):
-                self.enc_pos_estTM1 = data.data
-            else:
-                self.enc_pos_estTM2 = data.data
+    def enc_tm1_callback(self, data):
+        self.enc_vel_tm1 = data.data
+
+    def enc_tm2_callback(self, data):
+        self.enc_vel_tm2 = data.data
 
     def calculate_odometry(self):
         current_time = rospy.Time.now()
-        delta_time = (current_time - self.last_time).to_sec()
+        dt = (current_time - self.prev_time).to_sec()
 
-        # Convert encoder data to linear displacement
-        wheel_radius = WHEEL_RADIUS  # Replace with your wheel radius
-        ticks_per_revolution = TICKS_PER_REVOLUTION  # Replace with your encoder's ticks per revolution
+        # Calculate linear and angular velocity from encoder data
+        linear_vel = (self.enc_vel_tm1 + self.enc_vel_tm2) / 2.0
+        angular_vel = (self.enc_vel_tm2 - self.enc_vel_tm1) / 0.67  # Assuming axle length is 0.67
 
-        delta_x = ((self.enc_pos_estTM1 + self.enc_pos_estTM2) / 2.0 / ticks_per_revolution) * (2 * 3.14 * wheel_radius)
-        delta_y = 0.0  # Assuming no lateral movement (in a 2D plane)
-        delta_theta = (self.enc_pos_estTM2 - self.enc_pos_estTM1) / ticks_per_revolution / AXLE_LENGTH
+        # Calculate distance traveled
+        linear_dist = linear_vel * dt
+        angular_dist = angular_vel * dt
 
         # Update pose
-        self.x += delta_x
-        self.y += delta_y
-        self.theta += delta_theta
+        self.pose.position.x += linear_dist * math.cos(self.pose.orientation.z)
+        self.pose.position.y += linear_dist * math.sin(self.pose.orientation.z)
+        self.pose.orientation.z += angular_dist
 
-        # Create Odometry message
-        odom_msg = Odometry()
-        odom_msg.header.stamp = current_time
-        odom_msg.header.frame_id = 'odom'
-        odom_msg.child_frame_id = 'base_link'
-        
-        # Position
-        odom_msg.pose.pose = Pose(Point(self.x, self.y, 0.0), Quaternion(*quaternion_from_euler(0, 0, self.theta)))
+        # Update twist
+        self.twist.linear.x = linear_vel
+        self.twist.angular.z = angular_vel
 
-        # Set covariance values (if needed)
-        odom_msg.pose.covariance = [0.0] * 36  # Replace with appropriate covariance values
+        # Update header
+        self.odom.header.stamp = current_time
 
-        # Velocity (currently set to 0, you can calculate it if needed)
-        odom_msg.twist.twist = Twist(Vector3(0.0, 0.0, 0.0), Vector3(0.0, 0.0, 0.0))
+        self.prev_time = current_time
 
-        # Set covariance values (if needed)
-        odom_msg.twist.covariance = [0.0] * 36  # Replace with appropriate covariance values
-
-        # Publish the Odometry message
-        self.odom_pub.publish(odom_msg)
-
-        self.last_time = current_time
+    def publish_odometry(self):
+        self.calculate_odometry()
+        self.odom.pose.pose = self.pose
+        self.odom.twist.twist = self.twist
+        self.odom_pub.publish(self.odom)
 
     def main(self):
-        rospy.loginfo("Odometry Calculator Node started.")
+        rospy.loginfo("Encoder to Odometry Node started.")
+        rate = rospy.Rate(10)  # 10 Hz
         while not rospy.is_shutdown():
-            self.calculate_odometry()
-            self.rate.sleep()
+            self.publish_odometry()
+            rate.sleep()
 
 if __name__ == '__main__':
     try:
-        AXLE_LENGTH = 0.67  # distance between the left and right wheels
-        WHEEL_RADIUS = 0.19  # radius of each wheel
-        TICKS_PER_REVOLUTION = 1000  # Replace with your encoder's ticks per revolution
-        
-        odometry_calculator = OdometryCalculator()
-        odometry_calculator.main()
+        encoder_to_odom = EncoderToOdometry()
+        encoder_to_odom.main()
     except rospy.ROSInterruptException:
         pass
