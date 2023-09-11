@@ -4,7 +4,8 @@ import rospy
 import math
 from std_msgs.msg import Float64
 from nav_msgs.msg import Odometry
-from geometry_msgs.msg import Quaternion, Pose, Twist
+from geometry_msgs.msg import Pose, Twist, Quaternion
+import tf.transformations as tf
 
 class EncoderToOdometry:
 
@@ -46,7 +47,10 @@ class EncoderToOdometry:
         # Update pose
         self.pose.position.x += linear_dist * math.cos(self.pose.orientation.z)
         self.pose.position.y += linear_dist * math.sin(self.pose.orientation.z)
-        self.pose.orientation.z += angular_dist
+
+        # Update quaternion (orientation)
+        quaternion = tf.quaternion_from_euler(0, 0, self.pose.orientation.z + angular_dist)
+        self.pose.orientation = Quaternion(*quaternion)
 
         # Update twist
         self.twist.linear.x = linear_vel

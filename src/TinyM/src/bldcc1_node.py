@@ -22,11 +22,16 @@ class TinyM:
         params = get_bus_config()
         params["interface"] = "slcan"
         params["bitrate"] = 1000000
-        params["channel"] = "/dev/ttyACM0"
+        params["channel"] = "/dev/ttyACM1"
         init_tee(can.Bus(**params))
 
         self.tm1 = create_device(node_id=1)
         self.tm2 = create_device(node_id=2)
+        
+        self.tm1.controller.calibrate()
+        time.sleep(2)
+        self.tm2.controller.calibrate()
+        time.sleep(2)
 
         self.tm1.encoder.type = 1
         self.tm1.motor.pole_pairs = 4
@@ -65,16 +70,16 @@ class TinyM:
         self.tm2.controller.velocity.setpoint = (left_w_rpm / 60) * 24 * 60
 
     def encoder_pub(self):
-        pub1 = rospy.Publisher('encoder_vel_tm1', Float64, queue_size=10)
-        pub2 = rospy.Publisher('encoder_vel_tm2', Float64, queue_size=10)
+        pub1 = rospy.Publisher('encoder_pos_tm1', Float64, queue_size=10)
+        pub2 = rospy.Publisher('encoder_pos_tm2', Float64, queue_size=10)
 
         while not rospy.is_shutdown():
             with self.lock:  # Acquire the lock to safely access self.tm1 and self.tm2
-                enc_vel_estTM1 = self.tm1.encoder.velocity_estimate.magnitude
-                enc_vel_estTM2 = self.tm2.encoder.velocity_estimate.magnitude
+                enc_pos_estTM1 = self.tm1.encoder.position_estimate.magnitude
+                enc_pos_estTM2 = self.tm2.encoder.position_estimate.magnitude
 
-            pub1.publish(Float64(enc_vel_estTM1))
-            pub2.publish(Float64(enc_vel_estTM2))
+            pub1.publish(Float64(enc_pos_estTM1))
+            pub2.publish(Float64(enc_pos_estTM2))
 
     def main(self):
         rospy.loginfo("Robot Motion Control Node started.")
