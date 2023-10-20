@@ -19,31 +19,27 @@ AXLE_LENGTH = 0.76  # distance between the left and right wheels
 WHEEL_RADIUS = 0.19  # radius of each wheel
 
 class TinyM:
-    
-   
-
-    def find_serial_devices(pattern):
+    def find_serial_devices(self, pattern):
         serial_devices = glob.glob(pattern)
         return serial_devices
-    
-    # Specify the pattern you want to match
-    pattern = '/dev/ttyACM*'
-
-    # Find serial devices matching the pattern
-    matching_devices = find_serial_devices(pattern)
-
-    # Print the list of matching devices
-    for device in matching_devices:
-        print("Serial Device Found:", device)
-
 
     def __init__(self):
         rospy.init_node('bldc_nodee', anonymous=True)
 
+        pattern = '/dev/ttyACM*'
+        matching_devices = self.find_serial_devices(pattern)
+
+        if matching_devices:
+            # If matching devices are found, use the first one as the channel
+            channel = matching_devices[0]
+        else:
+            # If no matching devices are found, use "/dev/ttyACM0" as a default
+            channel = "/dev/ttyACM0"
+
         params = get_bus_config()
         params["interface"] = "slcan"
         params["bitrate"] = 1000000
-        params["channel"] = "/dev/ttyACM0"
+        params["channel"] = channel
         init_tee(can.Bus(**params))
 
         self.tm3 = create_device(node_id=3)
@@ -51,15 +47,9 @@ class TinyM:
         
         self.tm3.reset()
         self.tm2.reset()
-        
-        #self.tm3.controller.calibrate()
-        #time.sleep(2)
-        #self.tm2.controller.calibrate()
-        #time.sleep(2)
 
         self.tm3.encoder.type = 1
         self.tm3.motor.pole_pairs = 4
-        #self.tm3.controller.position.p_gain = 0.007
         self.tm3.controller.velocity.p_gain = 0.007
         self.tm3.controller.velocity.i_gain = 0.001
         self.tm3.save_config()
@@ -68,7 +58,6 @@ class TinyM:
 
         self.tm2.encoder.type = 1
         self.tm2.motor.pole_pairs = 4
-        #self.tm2.controller.position.p_gain = 0.007
         self.tm2.controller.velocity.p_gain = 0.007
         self.tm2.controller.velocity.i_gain = 0.001
         self.tm2.save_config()
@@ -79,24 +68,22 @@ class TinyM:
 
         # Create a lock for thread safety
         self.lock = threading.Lock()
-        
-        self.enc_time_buffer = deque(maxlen=100)  # Buffer for storing timestamps
-        self.enc_vel_estTM1_buffer = deque(maxlen=100)  # Buffer for storing enc_vel_estTM1 values
-        self.enc_vel_estTM2_buffer = deque(maxlen=100)  # Buffer for storing enc_vel_estTM2 values
-    
+
+        self.enc_time_buffer = deque(maxlen=100)
+        self.enc_vel_estTM1_buffer = deque(maxlen=100)
+        self.enc_vel_estTM2_buffer = deque(maxlen=100)
+
     def plot_encoders(self):
         while not rospy.is_shutdown():
-            with self.lock:  # Acquire the lock to safely access self.tm3 and self.tm2
+            with self.lock:
                 enc_vel_estTM1 = self.tm3.encoder.velocity_estimate.magnitude
                 enc_vel_estTM2 = self.tm2.encoder.velocity_estimate.magnitude
-                enc_time = time.time()  # Get the current timestamp
+                enc_time = time.time()
 
-            # Append the values to the buffers
             self.enc_vel_estTM1_buffer.append(enc_vel_estTM1)
             self.enc_vel_estTM2_buffer.append(enc_vel_estTM2)
             self.enc_time_buffer.append(enc_time)
 
-            # Plot the data
             plt.figure(figsize=(8, 6))
             plt.plot(self.enc_time_buffer, self.enc_vel_estTM1_buffer, label='enc_vel_estTM1')
             plt.plot(self.enc_time_buffer, self.enc_vel_estTM2_buffer, label='enc_vel_estTM2')
@@ -107,37 +94,26 @@ class TinyM:
             plt.title('Encoder Velocity vs. Time')
             plt.pause(0.01)
 
-
     def engage(self):
-        #self.tm3.reset()
-        #self.tm2.reset()
-
         self.tm3.controller.velocity_mode()
         self.tm3.controller.velocity_setpoint = 0
         time.sleep(2)
         self.tm2.controller.velocity_mode()
         self.tm2.controller.velocity_setpoint = 0
-
         time.sleep(2)
-
         signal.signal(signal.SIGINT, self.signal_handler)
 
     def cmd_vel_clbk(self, msg):
-        
         st1 = self.tm3.controller.state
-        print("state of tm3: "  ,st1)
-        
         st2 = self.tm2.controller.state
-        print("state of tm2: ",st2)
         
         if st1 == 0 or st2 == 0:
-             print("motors in error state, resetting motors ")
-             self.tm3.controller.velocity.setpoint = 0
-             self.tm2.controller.velocity.setpoint = 0
-             self.tm2.reset()
-             self.tm3.reset()
-             time.sleep(2)
-             
+            print("Motors in error state, resetting motors")
+            self.tm3.controller.velocity.setpoint = 0
+            self.tm2.controller.velocity.setpoint = 0
+            self.tm2.reset()
+            self.tm3.reset()
+            time.sleep(2)
              
         left_w_vel = msg.linear.x - (msg.angular.z * AXLE_LENGTH)
         right_w_vel = msg.linear.x + (msg.angular.z * AXLE_LENGTH)
@@ -147,29 +123,16 @@ class TinyM:
 
         self.tm3.controller.velocity.setpoint = -(right_w_rpm / 60) * 24 * 60
         self.tm2.controller.velocity.setpoint = (left_w_rpm / 60) * 24 * 60
-        
-        
-        
-      
-        
+
         st3 = self.tm3.controller.warnings
-        print("TM3 controller warnings: " ,st3)
-        
         st4 = self.tm2.controller.warnings
-        print("TM2 controller warnings: " ,st4)
-        
         st5 = self.tm3.controller.errors
         st6 = self.tm2.controller.errors
-        
-        
-        print("TM3 controller errors: " ,st5)
-        print("TM2 controller errors: " ,st6)
 
-        
-        
-        #if(st1 ==0 or st2 ==0):
-            #self.tm3.reset()
-           # self.tm2.reset()
+        print("TM3 controller warnings:", st3)
+        print("TM2 controller warnings:", st4)
+        print("TM3 controller errors:", st5)
+        print("TM2 controller errors:", st6)
 
     def encoder_pub(self):
         pub1 = rospy.Publisher('encoder_pos_tm1', Float64, queue_size=100)
@@ -178,49 +141,27 @@ class TinyM:
         pub4 = rospy.Publisher('encoder_vel_tm2', Float64, queue_size=100)
 
         while not rospy.is_shutdown():
-            with self.lock:  # Acquire the lock to safely access self.tm3 and self.tm2
-                
+            with self.lock:
                 enc_vel_estTM1 = self.tm3.encoder.velocity_estimate.magnitude
                 enc_vel_estTM2 = self.tm2.encoder.velocity_estimate.magnitude
-             
-           
                 
                 enc_pos_estTM1 = self.tm3.encoder.position_estimate.magnitude
                 enc_pos_estTM2 = self.tm2.encoder.position_estimate.magnitude
 
             pub1.publish(Float64(enc_pos_estTM1))
             pub2.publish(Float64(enc_pos_estTM2))
-            
             pub3.publish(Float64(enc_vel_estTM1))
             pub4.publish(Float64(enc_vel_estTM2))
-        
-        while not rospy.is_shutdown():
-            with self.lock:  # Acquire the lock to safely access self.tm3 and self.tm2
-                enc_vel_estTM1 = self.tm3.encoder.velocity_estimate.magnitude
-                enc_vel_estTM2 = self.tm2.encoder.velocity_estimate.magnitude
-                enc_time = time.time()  # Get the current timestamp
-
-            pub1.publish(Float64(enc_pos_estTM1))
-            pub2.publish(Float64(enc_pos_estTM2))
-            pub3.publish(Float64(enc_vel_estTM1))
-            pub4.publish(Float64(enc_vel_estTM2))
-            
-            
 
     def main(self):
         rospy.loginfo("Robot Motion Control Node started.")
-        self.engage()  # Start the controllers
-        self.watchdog() #start watchdogs
+        self.engage()
+        self.watchdog()
         rospy.Subscriber('/cmd_vel', Twist, self.cmd_vel_clbk)
 
-        # Create a thread to publish encoder data
         encoder_thread = threading.Thread(target=self.encoder_pub)
         encoder_thread.start()
 
-        while not rospy.is_shutdown():
-            self.rate.sleep()
-        
-          # Create a thread to plot encoder data
         plot_thread = threading.Thread(target=self.plot_encoders)
         plot_thread.start()
 
@@ -228,10 +169,8 @@ class TinyM:
             self.rate.sleep()
 
     def watchdog(self):
-        """Watchdog function that checks if any of the TMs are in an error state."""
         self.tm2.watchdog.timeout = 2
         self.tm3.watchdog.timeout = 2
-    
     
     def signal_handler(self, signum, frame):
         print("Stopping the program and idling the controller...")
