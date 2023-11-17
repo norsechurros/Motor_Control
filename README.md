@@ -1,3 +1,3 @@
-# TinyMovr
+Motor control
 
-TinyMovr Workspace to run the motors using teleop
+Initial base logic for BLDC motor control and teleoperation
